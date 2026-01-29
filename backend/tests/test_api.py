@@ -1,3 +1,8 @@
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -80,32 +85,46 @@ def test_words_crud_and_conflict(client):
     assert r.status_code == 404
 
 
-def test_sentences_crud(client):
+def test_sentences_crud_with_categories(client):
     payload = {
         "sentence_en": "Could you share the latest update by EOD?",
         "translation_cn": "你能在下班前分享最新进展吗？",
         "scene": "邮件沟通",
         "notes": None,
+        "scene_categories": ["邮件沟通", "会议"],
+        "topic_categories": ["催办", "对齐共识"],
+        "domain_categories": ["QA", "通用职场"],
     }
 
     r = client.post("/api/sentences", json=payload)
     assert r.status_code == 200
     created = r.json()
     sid = created["id"]
+    assert created["scene_categories"] == ["邮件沟通", "会议"]
+    assert created["topic_categories"] == ["催办", "对齐共识"]
+    assert created["domain_categories"] == ["QA", "通用职场"]
 
     r = client.get("/api/sentences")
     assert r.status_code == 200
-    assert any(x["id"] == sid for x in r.json())
+    got = next(x for x in r.json() if x["id"] == sid)
+    assert got["topic_categories"] == ["催办", "对齐共识"]
 
     update_payload = {
         "sentence_en": "Could you share the latest update by EOD today?",
         "translation_cn": "你能在今天下班前分享最新进展吗？",
         "scene": "邮件沟通",
         "notes": "更明确时间",
+        "scene_categories": ["邮件沟通"],
+        "topic_categories": ["澄清"],
+        "domain_categories": ["电商"],
     }
     r = client.put(f"/api/sentences/{sid}", json=update_payload)
     assert r.status_code == 200
-    assert r.json()["notes"] == "更明确时间"
+    updated = r.json()
+    assert updated["notes"] == "更明确时间"
+    assert updated["scene_categories"] == ["邮件沟通"]
+    assert updated["topic_categories"] == ["澄清"]
+    assert updated["domain_categories"] == ["电商"]
 
     r = client.delete(f"/api/sentences/{sid}")
     assert r.status_code == 200
